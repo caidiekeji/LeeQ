@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  # GitHub Container Registry 镜像名（必须全小写）
+  # GitHub Container Registry 镜像名
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/leeq
 
 jobs:
