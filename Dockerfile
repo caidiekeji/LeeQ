@@ -3,9 +3,9 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/client
 
-# 安装前端依赖
+# 安装前端依赖（优先用 ci，无 lock 则用 install）
 COPY client/package.json client/package-lock.json* ./
-RUN npm ci
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # 复制前端源码并构建
 COPY client/ ./
@@ -19,7 +19,7 @@ WORKDIR /app/server
 
 # 安装后端依赖（含dev依赖，用于编译TypeScript）
 COPY server/package.json server/package-lock.json* ./
-RUN npm ci
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # 复制后端源码并编译
 COPY server/ ./
@@ -36,7 +36,7 @@ RUN apk add --no-cache postgresql-client tzdata
 
 # 安装生产依赖
 COPY --from=backend-builder /app/server/package.json /app/server/package-lock.json* ./
-RUN npm ci --omit=dev
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
 
 # 复制后端编译产物
 COPY --from=backend-builder /app/server/dist ./dist
