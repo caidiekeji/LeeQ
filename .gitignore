@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+uploads/
+.trae/
+.vscode/
+docs/
+tools/
+123.txt

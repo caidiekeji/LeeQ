@@ -1,0 +1,1 @@
+function n(t){return t?new Date(t).toLocaleString("zh-CN"):"-"}function e(t,r){return t?t.length>r?t.substring(0,r)+"...":t:"-"}function a(t){return t?t.toLocaleString():"0"}export{n as a,a as f,e as t};

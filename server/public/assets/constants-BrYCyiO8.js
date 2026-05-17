@@ -1,0 +1,1 @@
+const a=20,s=1,t={id:16,url:55,input:50,prompt:60,preview:40,result:40},e={anycrawl:{apiUrl:"https://anycrawl.example.com",apiKey:""},elasticsearch:{hosts:"http://localhost:9200",indexPrefix:"a_search"}};export{a as D,t as T,s as a,e as b};
