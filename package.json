@@ -1,0 +1,19 @@
+{
+  "name": "ai-search",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI搜索引擎 — 根配置",
+  "scripts": {
+    "start": "cd server && node dist/index.js",
+    "postinstall": "cd server && npm install",
+    "build": "cd server && npx tsc",
+    "db:init": "cd server && npm run db:init",
+    "quality:page-audit": "node tools/quality-cli/dist/index.js page-audit",
+    "quality:api-check": "node tools/quality-cli/dist/index.js api-check",
+    "quality:test-report": "node tools/quality-cli/dist/index.js test-report",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.0.0"
+  }
+}

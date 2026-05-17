@@ -1,0 +1,45 @@
+services:
+  # ============ AI搜索引擎应用 ============
+  app:
+    build: .
+    container_name: ai-search-app
+    ports:
+      - "3001:3001"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ai_search_pwd_2026
+      DB_NAME: ai_search
+      JWT_SECRET: ai-search-jwt-secret-prod-2026
+      JWT_EXPIRES_IN: 86400
+      PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - uploads_data:/app/uploads
+
+  # ============ PostgreSQL数据库 ============
+  db:
+    image: postgres:15-alpine
+    container_name: ai-search-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ai_search_pwd_2026
+      POSTGRES_DB: ai_search
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_search"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:
+  uploads_data:
