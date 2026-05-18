@@ -53,7 +53,9 @@ export const conversationService = {
     const convId = payload.conversationId;
     const currentLock = conversationLocks.get(convId) || Promise.resolve();
     const newTask = currentLock.then(() => this._processTurnInternal(payload));
-    conversationLocks.set(convId, newTask.catch(() => {}));
+    conversationLocks.set(convId, newTask.catch((err) => {
+      console.error(`[Conversation] 会话 ${convId} 处理异常:`, err);
+    }));
     return newTask;
   },
 

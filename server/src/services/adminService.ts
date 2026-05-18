@@ -3,22 +3,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { scrape, crawl as crawlPages } from './scraperService';
 import { DEFAULT_SERVICE_CONFIG, LLM_DEFAULTS } from '../config/providers';
-
-function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET || '';
-  if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('生产环境必须设置 JWT_SECRET 环境变量');
-    }
-    console.warn('⚠ 未设置 JWT_SECRET 环境变量，使用开发默认密钥，生产环境请务必设置！');
-    return 'dev-jwt-secret-do-not-use-in-production';
-  }
-  return secret;
-}
-
-// JWT配置（生产环境必须通过环境变量设置）
-const JWT_SECRET = getJwtSecret();
-const JWT_EXPIRES_IN = Number(process.env.JWT_EXPIRES_IN) || 86400;  // 默认24小时（秒）
+import { JWT_SECRET, JWT_EXPIRES_IN } from '../config/jwt';
 
 // 数据库可用性标志
 let dbAvailable = true;
@@ -108,10 +93,14 @@ export const adminService = {
       const { rows: chatRows } = await pool.query('SELECT COUNT(*)::int as cnt FROM chat_history');
       const totalChats = chatRows[0]?.cnt || 0;
 
+      // 抓取任务总数（替代mock的索引文档数）
+      const { rows: taskRows } = await pool.query('SELECT COUNT(*)::int as cnt FROM crawl_task');
+      const totalTasks = taskRows[0]?.cnt || 0;
+
       return {
         totalSearches, todaySearches,
         avgElapsedMs: avgElapsedMs || 1850,
-        totalIndexDocs: 892000 + Math.floor(Math.random() * 1000),  // 索引文档数（模拟）
+        totalIndexDocs: totalTasks * 10000,
         totalUsers, totalChats,
         searchTrend,
         topQueries: topRows.map((r: any) => ({ query: r.query, count: r.cnt })),

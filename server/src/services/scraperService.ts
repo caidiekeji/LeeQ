@@ -504,7 +504,7 @@ export async function crawl(startUrl: string, maxDepth: number = SCRAPER.default
                 const normalized = normalizeUrl(absoluteUrl);
                 // 仅爬取同站点的URL
                 if (!visited.has(normalized) && new URL(absoluteUrl).origin === baseOrigin) {
-                  if (queue.length + results.length < maxPages * 2) {
+                  if (queue.length + results.length < maxPages) {
                     queue.push({ url: normalized, depth: depth + 1 });
                   }
                 }

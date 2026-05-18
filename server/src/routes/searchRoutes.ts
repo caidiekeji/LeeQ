@@ -7,20 +7,8 @@ import { adminService } from '../services/adminService';
 import { conversationService } from '../services/conversationService';
 import pool from '../config/database';
 import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '../config/jwt';
 
-function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET || '';
-  if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('生产环境必须设置 JWT_SECRET 环境变量');
-    }
-    console.warn('⚠ 未设置 JWT_SECRET 环境变量，使用开发默认密钥，生产环境请务必设置！');
-    return 'dev-jwt-secret-do-not-use-in-production';
-  }
-  return secret;
-}
-
-const JWT_SECRET = getJwtSecret();
 const router = Router();
 
 function getUserIdFromToken(req: Request): number | undefined {
@@ -46,6 +34,17 @@ interface ChatSession {
   fileContext?: string;
 }
 const chatContextCache = new Map<string, ChatSession>();
+const MAX_CHAT_CACHE_SIZE = 1000;
+
+/** 缓存大小限制：超出上限时清理最久未活动的会话 */
+function limitChatCacheSize() {
+  if (chatContextCache.size > MAX_CHAT_CACHE_SIZE) {
+    const entries = [...chatContextCache.entries()].sort((a, b) => a[1].lastActive - b[1].lastActive);
+    for (let i = 0; i < entries.length - MAX_CHAT_CACHE_SIZE / 2; i++) {
+      chatContextCache.delete(entries[i][0]);
+    }
+  }
+}
 
 async function saveChatToDb(userId: number, chatId: string, role: string, content: string) {
   try {
@@ -232,6 +231,7 @@ router.post('/chat', async (req: Request, res: Response) => {
 
     if (!chatContextCache.has(newChatId)) {
       chatContextCache.set(newChatId, { messages: [], lastActive: Date.now() });
+      limitChatCacheSize();
     }
 
     const session = chatContextCache.get(newChatId)!;
@@ -349,6 +349,7 @@ router.post('/chat/enhanced', async (req: Request, res: Response) => {
         skillPrompt: skillPrompt || undefined,
         fileContext: fileContext || undefined
       });
+      limitChatCacheSize();
     }
 
     const session = chatContextCache.get(newChatId)!;

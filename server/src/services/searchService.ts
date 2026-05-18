@@ -9,6 +9,16 @@ export const searchContextCache = new Map<string, {
   chatId?: string;
   userId?: number;
 }>();
+const MAX_SEARCH_CACHE_SIZE = 500;
+
+/** 缓存大小限制：超出上限时移除最旧条目 */
+function limitSearchCacheSize() {
+  if (searchContextCache.size > MAX_SEARCH_CACHE_SIZE) {
+    const keys = [...searchContextCache.keys()];
+    const toDelete = keys.slice(0, keys.length - MAX_SEARCH_CACHE_SIZE / 2);
+    for (const k of toDelete) searchContextCache.delete(k);
+  }
+}
 
 /**
  * 搜索服务：核心搜索业务逻辑
@@ -57,6 +67,7 @@ export const searchService = {
       query,
       results
     });
+    limitSearchCacheSize();
     // 10分钟后自动清理缓存
     setTimeout(() => searchContextCache.delete(searchId), 600000);
 

@@ -1,30 +1,8 @@
 import axios from 'axios';
 import pool from '../config/database';
 import { LLM_DEFAULTS, TIMEOUTS } from '../config/providers';
+import { getActiveLLMConfig } from '../config/llmConfig';
 import { getPrompt } from './promptService';
-
-/**
- * 获取当前激活的LLM配置（复用llmService中的逻辑）
- */
-async function getActiveLLMConfig() {
-  try {
-    const { rows } = await pool.query("SELECT config_value FROM system_config WHERE config_key = 'llm_config'");
-    if (rows.length === 0) return null;
-    const config = JSON.parse(rows[0].config_value);
-    if (!config.activeProviderId || !config.providers) return null;
-    const provider = config.providers.find((p: any) => p.id === config.activeProviderId);
-    if (!provider || !provider.selectedModel) return null;
-    return {
-      baseUrl: provider.baseUrl || '',
-      apiKey: provider.apiKey || '',
-      model: provider.selectedModel,
-      temperature: provider.temperature ?? LLM_DEFAULTS.temperature,
-      maxTokens: provider.maxTokens || LLM_DEFAULTS.maxTokens
-    };
-  } catch {
-    return null;
-  }
-}
 
 /**
  * 技能服务：技能模板管理与LLM执行
@@ -133,43 +111,48 @@ export const skillService = {
       });
 
       let fullText = '';
+    let finished = false;
 
-      response.data.on('data', (chunk: Buffer) => {
-        const lines = chunk.toString().split('\n').filter(line => line.trim());
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.substring(6);
-            if (data === '[DONE]') {
-              if (onBeforeFinish) onBeforeFinish(fullText);
-              onFinish(fullText);
-              return;
-            }
-            try {
-              const parsed = JSON.parse(data);
-              const content = parsed.choices?.[0]?.delta?.content || '';
-              if (content) {
-                fullText += content;
-                onChunk(content);
-              }
-            } catch { /* 忽略解析错误 */ }
+    response.data.on('data', (chunk: Buffer) => {
+      const lines = chunk.toString().split('\n').filter(line => line.trim());
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.substring(6);
+          if (data === '[DONE]') {
+            if (finished) return;
+            finished = true;
+            if (onBeforeFinish) onBeforeFinish(fullText);
+            onFinish(fullText);
+            return;
           }
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content || '';
+            if (content) {
+              fullText += content;
+              onChunk(content);
+            }
+          } catch { /* 忽略解析错误 */ }
         }
-      });
+      }
+    });
 
-      response.data.on('end', () => {
-        if (fullText) {
-          if (onBeforeFinish) onBeforeFinish(fullText);
-          onFinish(fullText);
-        }
-      });
+    response.data.on('end', () => {
+      if (fullText && !finished) {
+        finished = true;
+        if (onBeforeFinish) onBeforeFinish(fullText);
+        onFinish(fullText);
+      }
+    });
 
-      response.data.on('error', () => {
-        if (!fullText) {
-          const msg = '⚠️ AI请求失败，请重试。';
-          onChunk(msg);
-          onFinish(msg);
-        }
-      });
+    response.data.on('error', () => {
+      if (!fullText && !finished) {
+        finished = true;
+        const msg = '⚠️ AI请求失败，请重试。';
+        onChunk(msg);
+        onFinish(msg);
+      }
+    });
     } catch {
       const msg = '⚠️ AI服务连接失败，请检查网络或稍后重试。';
       onChunk(msg);

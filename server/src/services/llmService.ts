@@ -1,46 +1,9 @@
 import axios from 'axios';
-import pool from '../config/database';
 import { LLM_DEFAULTS, TIMEOUTS } from '../config/providers';
+import { getActiveLLMConfig, LLMConfig } from '../config/llmConfig';
 import { getPrompt } from './promptService';
 
-/**
- * LLM配置接口定义
- */
-export interface LLMConfig {
-  baseUrl: string;       // API基础URL
-  apiKey: string;        // API密钥
-  model: string;         // 模型名称
-  temperature: number;   // 温度参数（控制创造性）
-  maxTokens: number;     // 最大token数
-}
-
-/**
- * 获取当前激活的LLM配置
- * @returns LLM配置对象或null
- */
-async function getActiveLLMConfig(): Promise<LLMConfig | null> {
-  try {
-    const { rows } = await pool.query("SELECT config_value FROM system_config WHERE config_key = 'llm_config'");
-    if (rows.length === 0) return null;
-
-    const config = JSON.parse(rows[0].config_value);
-
-    if (!config.activeProviderId || !config.providers) return null;
-
-    const provider = config.providers.find((p: any) => p.id === config.activeProviderId);
-    if (!provider || !provider.selectedModel) return null;
-
-    return {
-      baseUrl: provider.baseUrl || '',
-      apiKey: provider.apiKey || '',
-      model: provider.selectedModel,
-      temperature: provider.temperature ?? LLM_DEFAULTS.temperature,
-      maxTokens: provider.maxTokens || LLM_DEFAULTS.maxTokens
-    };
-  } catch {
-    return null;
-  }
-}
+export type { LLMConfig };
 
 /**
  * 流式聊天函数（用于搜索回答）
@@ -87,6 +50,7 @@ ${query}`;
     });
 
     let fullText = '';
+    let finished = false;
 
     // 处理流式数据块
     response.data.on('data', (chunk: Buffer) => {
@@ -95,6 +59,8 @@ ${query}`;
         if (line.startsWith('data: ')) {
           const data = line.substring(6);
           if (data === '[DONE]') {  // SSE结束标志
+            if (finished) return;
+            finished = true;
             onFinish(fullText);
             return;
           }
@@ -112,12 +78,16 @@ ${query}`;
 
     // 流结束
     response.data.on('end', () => {
-      if (fullText) onFinish(fullText);
+      if (fullText && !finished) {
+        finished = true;
+        onFinish(fullText);
+      }
     });
 
     // 流错误
     response.data.on('error', () => {
-      if (!fullText) {
+      if (!fullText && !finished) {
+        finished = true;
         const msg = '⚠️ LLM请求失败，请检查模型配置和 API Key 是否正确。';
         onChunk(msg);
         onFinish(msg);
@@ -164,6 +134,7 @@ export async function streamChatDirect(messages: Array<{ role: string; content: 
     });
 
     let fullText = '';
+    let finished = false;
 
     // 处理流式数据
     response.data.on('data', (chunk: Buffer) => {
@@ -172,6 +143,8 @@ export async function streamChatDirect(messages: Array<{ role: string; content: 
         if (line.startsWith('data: ')) {
           const data = line.substring(6);
           if (data === '[DONE]') {
+            if (finished) return;
+            finished = true;
             onFinish(fullText);
             return;
           }
@@ -189,12 +162,16 @@ export async function streamChatDirect(messages: Array<{ role: string; content: 
 
     // 流结束
     response.data.on('end', () => {
-      if (fullText) onFinish(fullText);
+      if (fullText && !finished) {
+        finished = true;
+        onFinish(fullText);
+      }
     });
 
     // 流错误
     response.data.on('error', () => {
-      if (!fullText) {
+      if (!fullText && !finished) {
+        finished = true;
         const msg = '⚠️ AI回答失败，请检查模型配置和 API Key 是否正确。';
         onChunk(msg);
         onFinish(msg);
@@ -291,28 +268,30 @@ export async function streamChatEnhanced(
     });
 
     let fullText = '';
-    response.data.on('data', (chunk: Buffer) => {
-      const lines = chunk.toString().split('\n').filter(line => line.trim());
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.substring(6);
-          if (data === '[DONE]') { onFinish(fullText); return; }
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content || '';
-            if (content) { fullText += content; onChunk(content); }
-          } catch { /* 忽略解析错误 */ }
-        }
+  let finished = false;
+  response.data.on('data', (chunk: Buffer) => {
+    const lines = chunk.toString().split('\n').filter(line => line.trim());
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const data = line.substring(6);
+        if (data === '[DONE]') { if (finished) return; finished = true; onFinish(fullText); return; }
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content || '';
+          if (content) { fullText += content; onChunk(content); }
+        } catch { /* 忽略解析错误 */ }
       }
-    });
+    }
+  });
 
-    response.data.on('end', () => { if (fullText) onFinish(fullText); });
-    response.data.on('error', () => {
-      if (!fullText) {
-        const msg = '⚠️ AI回答失败，请检查模型配置和 API Key 是否正确。';
-        onChunk(msg); onFinish(msg);
-      }
-    });
+  response.data.on('end', () => { if (fullText && !finished) { finished = true; onFinish(fullText); } });
+  response.data.on('error', () => {
+    if (!fullText && !finished) {
+      finished = true;
+      const msg = '⚠️ AI回答失败，请检查模型配置和 API Key 是否正确。';
+      onChunk(msg); onFinish(msg);
+    }
+  });
   } catch {
     const msg = '⚠️ AI服务连接失败，请检查网络或稍后重试。';
     onChunk(msg);

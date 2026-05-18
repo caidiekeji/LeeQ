@@ -199,8 +199,8 @@ export const backupService = {
       // 读取备份内容
       const content = await fs.promises.readFile(filePath, 'utf-8');
 
-      // 分割SQL语句并执行（跳过注释和空行）
-      const statements = content.split(';').filter(s => {
+      // 用状态机分割SQL语句（处理字符串内的分号）
+      const statements = splitSqlStatements(content).filter(s => {
         const trimmed = s.trim();
         return trimmed.length > 0 && !trimmed.startsWith('--');
       });
@@ -461,6 +461,40 @@ function generateBackupId(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 8).toUpperCase();
   return `backup_${timestamp}_${random}`;
+}
+
+/**
+ * 用状态机分割SQL语句（正确处理字符串内的分号）
+ * @param sql SQL内容
+ * @returns SQL语句数组
+ */
+function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let current = '';
+  let inString = false;
+  let stringChar = '';
+
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    if (inString) {
+      current += ch;
+      if (ch === stringChar && sql[i - 1] !== '\\') {
+        inString = false;
+      }
+    } else if (ch === "'" || ch === '"') {
+      inString = true;
+      stringChar = ch;
+      current += ch;
+    } else if (ch === ';') {
+      statements.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+
+  if (current.trim()) statements.push(current);
+  return statements;
 }
 
 // 初始化备份表
