@@ -10,7 +10,6 @@ RUN npm ci 2>/dev/null || npm install
 # 复制前端源码并构建
 COPY client/ ./
 RUN npm run build
-# 构建产物输出到 /app/server/public（vite.config.ts outDir: '../server/public'）
 
 # ============ 阶段2：构建后端 ============
 FROM node:20-alpine AS backend-builder
@@ -24,7 +23,6 @@ RUN npm ci 2>/dev/null || npm install
 # 复制后端源码并编译
 COPY server/ ./
 RUN npx tsc
-# 编译产物输出到 /app/server/dist
 
 # ============ 阶段3：生产运行镜像 ============
 FROM node:20-alpine
@@ -48,7 +46,6 @@ COPY --from=frontend-builder /app/server/public ./public
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
-# 创建上传目录
 RUN mkdir -p uploads
 
 EXPOSE 3001
