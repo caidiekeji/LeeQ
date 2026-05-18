@@ -3,8 +3,8 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/client
 
-# 安装前端依赖（lock文件不完整，直接用install）
-COPY client/package.json client/package-lock.json* ./
+# 只复制package.json，lock文件残缺会导致npm install失败
+COPY client/package.json ./
 RUN npm install
 
 # 复制前端源码并构建
@@ -16,9 +16,9 @@ FROM node:20-alpine AS backend-builder
 
 WORKDIR /app/server
 
-# 安装后端依赖（含dev依赖，用于编译TypeScript）
-COPY server/package.json server/package-lock.json* ./
-RUN npm install
+# 只复制package.json，跳过postinstall避免tsc提前执行
+COPY server/package.json ./
+RUN npm install --ignore-scripts
 
 # 复制后端源码并编译
 COPY server/ ./
@@ -33,8 +33,8 @@ WORKDIR /app
 RUN apk add --no-cache postgresql-client tzdata
 
 # 安装生产依赖
-COPY --from=backend-builder /app/server/package.json /app/server/package-lock.json* ./
-RUN npm install --omit=dev
+COPY --from=backend-builder /app/server/package.json ./
+RUN npm install --omit=dev --ignore-scripts
 
 # 复制后端编译产物
 COPY --from=backend-builder /app/server/dist ./dist
